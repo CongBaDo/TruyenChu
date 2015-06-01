@@ -725,7 +725,7 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 				keepText = pageSplitter.getPages().get(pageIndex-1).toString();
 			}
 		}
-		Log.e(TAG, "onPageSelected "+keepText+" "+index);
+//		Log.e(TAG, "onPageSelected "+keepText+" "+index);
 		
 		viewCountPage++;
 		
