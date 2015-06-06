@@ -44,5 +44,5 @@
     <dimen name="space_between_view">8dp</dimen>
     
     <dimen name="space_between_double_view">16dp</dimen>
-    <dimen name="space_between_triple_view">24dp</dimen>
+    <dimen name="space_between_triple_view">12dp</dimen>
 </resources>

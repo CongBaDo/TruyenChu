@@ -8,14 +8,19 @@ import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.Paint.Align;
 import android.graphics.Typeface;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v4.view.ViewPager.OnPageChangeListener;
 import android.text.Html;
+import android.text.Spanned;
+import android.text.SpannedString;
 import android.text.TextPaint;
+import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.TypedValue;
@@ -30,19 +35,17 @@ import android.view.animation.Animation;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.LinearLayout.LayoutParams;
-import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.SeekBar.OnSeekBarChangeListener;
 import android.widget.TextView;
 
-import com.bluejamesbond.text.DocumentView;
-import com.bluejamesbond.text.style.TextAlignment;
 import com.google.android.gms.ads.AdListener;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.AdView;
 import com.google.android.gms.ads.InterstitialAd;
 import com.ikaratruyen.R;
+import com.ikaratruyen.customview.JustifiedTextView;
 import com.ikaratruyen.model.Chapter;
 import com.ikaratruyen.model.GetChapterRequest;
 import com.ikaratruyen.model.GetChapterResponse;
@@ -80,7 +83,7 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 	private int readerState = IkaraConstant.READER_STATE.NIGHT;
 	private int sizeChap = 0;
 	private TextView tvIncrease, tvDecrease, tvChapIndexTop;
-	private float currentTextSize = 0.0f;
+	private int currentTextSize = 0;
 	private String currentContent;
 	private ImageView imgIndexTop;
 	private String bookId;
@@ -94,15 +97,14 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 	private ProgressDialog dialogLoading;
 	private String keepText = "";
 	private int swipeType = IkaraConstant.SWIPE.NONE;
-	DisplayMetrics metrics;
 
 	@SuppressLint("NewApi")
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_newreader);
-//		DisplayMetrics metrics = new DisplayMetrics();
-//		getWindowManager().getDefaultDisplay().getMetrics(metrics);
+		DisplayMetrics metrics = new DisplayMetrics();
+		getWindowManager().getDefaultDisplay().getMetrics(metrics);
 		currentChapIndex = getIntent().getExtras().getInt("chap_index");
 		chapTitle = getIntent().getExtras().getString("chap_title");
 		bookId = getIntent().getExtras().getString("book_id");
@@ -110,8 +112,6 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 		 Log.d(TAG, "onCreate: " + bookId);
 
 		headerBar = (LinearLayout) findViewById(R.id.top_bar_reader);
-		metrics = getResources().getDisplayMetrics();
-		getWindowManager().getDefaultDisplay().getMetrics(metrics);
 
 		TypedValue tv = new TypedValue();
 		if (getTheme().resolveAttribute(android.R.attr.actionBarSize, tv, true)) {
@@ -148,10 +148,9 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 		tvChapIndexTop.setOnClickListener(this);
 		imgIndexTop.setOnClickListener(this);
 
-//		currentTextSize = IkaraPreferences.getIntPref(getApplicationContext(),
-//				PrefConstant.PREF_TEXT_SIZE,
-//				(int) getResources().getDimension(R.dimen.text_size));
-		currentTextSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14, metrics);
+		currentTextSize = IkaraPreferences.getIntPref(getApplicationContext(),
+				PrefConstant.PREF_TEXT_SIZE,
+				(int) getResources().getDimension(R.dimen.text_size));
 
 		if (ISettings.getInstance().getChapListContents().get(currentChapIndex).volume != null) {
 			long volume = ISettings.getInstance().getChapListContents()
@@ -161,8 +160,7 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 					+ " " + volume);
 		}
 
-		Log.v(TAG, "current Text Size " + currentTextSize + " "
-				+ ISettings.getInstance().getChapListContents().get(30).volume);
+		Log.v(TAG, "current Text Size " + currentTextSize);
 
 		tvDecrease.setOnClickListener(this);
 		tvIncrease.setOnClickListener(this);
@@ -277,15 +275,25 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 		return null;
 	}
 	
-	/**
-	 * @param id is chapId*/
-	private void loadChapContent(String id) {
-		Log.v(TAG, "loadChapContent "+id+" "+currentChapIndex);
+	private void showLoading(){
 		dialogLoading = new ProgressDialog(INewReaderActivity.this);
 		dialogLoading.setMessage("Loading...");
 		dialogLoading.setProgressStyle(ProgressDialog.STYLE_SPINNER);
 		dialogLoading.setCancelable(false);
 		dialogLoading.show();
+	}
+	
+	private void hideLoading(){
+		if(dialogLoading != null){
+			dialogLoading.dismiss();
+		}
+	}
+	
+	/**
+	 * @param id is chapId*/
+	private void loadChapContent(String id) {
+		Log.v(TAG, "loadChapContent "+id+" "+currentChapIndex);
+		showLoading();
 
 		chapTitle = getCurrentChapter(id).title;
 		
@@ -307,9 +315,7 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 				e.printStackTrace();
 			}
 			processChapContent(content);
-			if(dialogLoading != null){
-				dialogLoading.dismiss();
-			}
+			hideLoading();
 			
 			chapId = id;
 		}else{
@@ -332,9 +338,8 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 
 					processChapContent(statusObj.chapter.content);
 					
-					if(dialogLoading != null){
-						dialogLoading.dismiss();
-					}
+					processOpenWithIndex();
+					hideLoading();
 				}
 
 				@Override
@@ -364,10 +369,29 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 		Log.i(TAG, "processIndex "+chapId+" "+currentChapIndex+" "+pageIndex);
 	}
 	
+	private String convert2Html(String originalText){
+		String results = "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
+		results = results + "\n";
+		results = results + "<body>";
+		String[] lines = originalText.split(System.getProperty("line.separator"));
+		
+		for(int i = 0; i < lines.length; i++){
+			results = results + "<p>"+lines[i]+"</p>";
+		}
+		
+		results = results +"</body>";
+		
+		return results;
+	}
+	
 	private void processChapContent(String content){
+		
 		currentContent = content;
-		currentContent = currentContent.replaceAll("(?m)^[ \t]*\r?\n", "");
-		Log.w(TAG, "processChapContent " + pageIndex);
+		
+		
+		String convertHtml = convert2Html(content);
+		Log.i(TAG, "processChapContent "+convertHtml);
+		Utils.writeFileOnSDCard(convertHtml, getApplicationContext(), "nemodotest.fb2");
 		tvChapIndexTop.setText((currentChapIndex + 1) + "");
 		tvIndex.setText(pageIndex + "/" + (sizeChap + 1));
 		tvChapIndex.setText(getResources().getString(R.string.chapter_value)
@@ -382,16 +406,16 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 	}
 
 	private void resetTextSize(final int state) {
-		int bottomHeight = Utils.dpToPx(INewReaderActivity.this, 48);
-		
+		int bottomHeight = Utils.dpToPx(INewReaderActivity.this, 50);
+		int padding = Utils.dpToPx(INewReaderActivity.this, 12);
 //		if(Utils.detectDeviceType(INewReaderActivity.this) == DEVICETYPE.PHONE){
 //			bottomHeight = bottomHeight * 3;
 //		}else{
 //			bottomHeight = bottomHeight * 5;
 //		}
 		
-		pageSplitter = new PageSplitter(ISettings.getInstance().getWidth(),
-				ISettings.getInstance().getHeight() - 2*bottomHeight, 1, 0);
+		pageSplitter = new PageSplitter(ISettings.getInstance().getWidth() - 2*padding,
+				ISettings.getInstance().getHeight() - Utils.getStatusBarHeight(getApplicationContext()) - 2*padding , 1, 0);
 		TextPaint textPaint = new TextPaint();
 		textPaint.setTextSize(currentTextSize);
 		pageSplitter.append(currentContent, textPaint);
@@ -430,6 +454,8 @@ public class INewReaderActivity extends Activity implements OnClickListener,
             	}
             	adapter.notifyDataSetChanged();
             	pagerReader.setCurrentItem(pageIndex);
+            	tvDecrease.setEnabled(true);
+            	tvIncrease.setEnabled(true);
             }
         });
 	}
@@ -463,10 +489,20 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 			break;
 
 		case R.id.tv_increase:
+			Log.i(TAG, "currentChapIndex "+currentChapIndex);
+//			if(pageIndex > 0){
+//				new ProcessTask(1).execute();
+//			}
+        	tvIncrease.setEnabled(false);
 			inCrease();
 			break;
 
 		case R.id.tv_decrease:
+			Log.i(TAG, "currentChapIndex "+currentChapIndex);
+//			if(pageIndex > 0){
+//				new ProcessTask(0).execute();
+//			}
+			tvDecrease.setEnabled(false);
 			decrease();
 			break;
 
@@ -515,17 +551,17 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 	private void decrease() {
 		Log.e(TAG, "decrease");
 		currentTextSize = currentTextSize - 10;
-//		IkaraPreferences.saveIntPref(getApplicationContext(),
-//				PrefConstant.PREF_TEXT_SIZE, currentTextSize);
-//		resetTextSize(IkaraConstant.UPDATE_READER.DECREASE);
+		IkaraPreferences.saveIntPref(getApplicationContext(),
+				PrefConstant.PREF_TEXT_SIZE, currentTextSize);
+		resetTextSize(IkaraConstant.UPDATE_READER.DECREASE);
 	}
 
 	private void inCrease() {
 		Log.i(TAG, "inCrease");
 		currentTextSize = currentTextSize + 10;
-//		IkaraPreferences.saveIntPref(getApplicationContext(),
-//				PrefConstant.PREF_TEXT_SIZE, currentTextSize);
-//		resetTextSize(IkaraConstant.UPDATE_READER.INCREASE);
+		IkaraPreferences.saveIntPref(getApplicationContext(),
+				PrefConstant.PREF_TEXT_SIZE, currentTextSize);
+		resetTextSize(IkaraConstant.UPDATE_READER.INCREASE);
 	}
 
 	private void chageState() {
@@ -612,11 +648,17 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 
 			LayoutInflater inflater = (LayoutInflater)getBaseContext().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
 		    View view =  inflater.inflate(R.layout.page_reader, container, false);
-		    LinearLayout llContainer = (LinearLayout)view.findViewById(R.id.ll_container);
+		    JustifiedTextView textView = (JustifiedTextView)view.findViewById(R.id.tv_content);
+//		    WebView textView = (WebView)view.findViewById(R.id.tv_content);
+//		    LinearLayout llContainer = (LinearLayout)view.findViewById(R.id.ll_container);
+//		    TextView textView = (TextView)view.findViewById(R.id.tv_content);
 		    TextView tvTitle = (TextView)view.findViewById(R.id.tv_title_chap_page);
 		    RelativeLayout containerChild = (RelativeLayout)view.findViewById(R.id.contain_child);
 			String getFont = IkaraPreferences.getStringPref(INewReaderActivity.this, PrefConstant.PREF_FONT, "DroidSans.ttf");
 			Typeface type = Typeface.createFromAsset(getAssets(),"fonts/"+getFont); 
+//			textView.setTypeFace(type);
+//			textView.setTypeface(type);
+			textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, currentTextSize);
 			tvTitle.setTypeface(type);
 			tvTitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, currentTextSize);
 			
@@ -628,33 +670,31 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 						+ "<p>"+getResources().getString(R.string.chapter_value)+" "+(currentChapIndex+1)+"</p>" 
 						+ "<p>"+chapTitle+"</p>";
 				tvTitle.setVisibility(View.VISIBLE);
-				llContainer.setVisibility(View.GONE);
+//				llContainer.setVisibility(View.GONE);
 				tvTitle.setGravity(Gravity.CENTER);
 				tvTitle.setText(Html.fromHtml(chapStartText));
 			}else{
 				tvTitle.setVisibility(View.GONE);
-				llContainer.setVisibility(View.VISIBLE);
-//				textView.setAlignment(Align.LEFT);
-//				textView.setText(pageSplitter.getPages().get(position-1).toString());
+//				llContainer.setVisibility(View.VISIBLE);
+				textView.setAlignment(Align.LEFT);
+				textView.setText(pageSplitter.getPages().get(position-1).toString());
 				
 //				String youtContentStr = String.valueOf(Html
 //		                .fromHtml("<![CDATA[<body style=\"text-align:justify;color:#222222; \">"
 //		                            + pageSplitter.getPages().get(position-1).toString()
 //		                            + "</body>]]>")); 
 //				textView.loadData(youtContentStr, "text/html;charset=utf-8", null);
-				
-				addDocumentView(pageSplitter.getPages().get(position-1).toString(), llContainer, DocumentView.PLAIN_TEXT, false);
 		 
 			}
 			
 			if (state == IkaraConstant.READER_STATE.DAY) {
 				containerChild.setBackgroundColor(Color.BLACK);
-//				textView.setTextColor(Color.WHITE);
+				textView.setTextColor(Color.WHITE);
 				tvTitle.setTextColor(Color.WHITE);
 			} else {
 				containerChild.setBackgroundColor(Color.WHITE);
 				tvTitle.setTextColor(Color.BLACK);
-//				textView.setTextColor(Color.BLACK);
+				textView.setTextColor(Color.BLACK);
 			}
 			
 			view.setTag(position);
@@ -669,35 +709,6 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 		}
 	}
 	
-	public DocumentView addDocumentView(CharSequence article, LinearLayout llContainer, int type, boolean rtl) {
-        final DocumentView documentView = new DocumentView(this, type);
-        documentView.getDocumentLayoutParams().setTextColor(0xffffffff);
-        documentView.getDocumentLayoutParams().setTextTypeface(Typeface.DEFAULT);
-        documentView.getDocumentLayoutParams().setOriginalRawTextSize(currentTextSize);
-        documentView.getDocumentLayoutParams().setTextAlignment(TextAlignment.JUSTIFIED);
-        documentView.getDocumentLayoutParams().setInsetPaddingLeft(30f);
-        documentView.getDocumentLayoutParams().setInsetPaddingRight(30f);
-        documentView.getDocumentLayoutParams().setInsetPaddingTop(30f);
-        documentView.getDocumentLayoutParams().setInsetPaddingBottom(30f);
-        documentView.getDocumentLayoutParams().setLineHeightMultiplier(1f);
-        documentView.getDocumentLayoutParams().setReverse(rtl);
-        documentView.getDocumentLayoutParams().setDebugging(false);
-        documentView.setText(article);
-//        documentView.setProgressBar((ProgressBar) findViewById(R.id.progressBar));
-        documentView.setFadeInDuration(0);
-        documentView.setFadeInAnimationStepDelay(0);
-        LinearLayout linearLayout = new LinearLayout(this);
-        linearLayout.setOrientation(LinearLayout.VERTICAL);
-        linearLayout.setLayoutParams(
-                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.MATCH_PARENT));
-        linearLayout.addView(documentView);
-
-        llContainer.addView(linearLayout);
-
-        return documentView;
-    }
-
 	@Override
 	public void onPageScrollStateChanged(int arg0) {
 		// TODO Auto-generated method stub
@@ -725,7 +736,7 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 				keepText = pageSplitter.getPages().get(pageIndex-1).toString();
 			}
 		}
-//		Log.e(TAG, "onPageSelected "+keepText+" "+index);
+		Log.e(TAG, "onPageSelected "+keepText+" "+index);
 		
 		viewCountPage++;
 		
@@ -756,4 +767,5 @@ public class INewReaderActivity extends Activity implements OnClickListener,
 			}
 		}
 	}
+	
 }

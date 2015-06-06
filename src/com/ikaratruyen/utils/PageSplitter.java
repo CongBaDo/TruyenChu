@@ -5,7 +5,6 @@ import android.text.SpannableString;
 import android.text.SpannableStringBuilder;
 import android.text.TextPaint;
 import android.text.style.StyleSpan;
-import android.util.Log;
 
 import java.util.ArrayList;
 import java.util.List;

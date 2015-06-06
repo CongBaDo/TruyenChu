@@ -670,10 +670,10 @@ public class IMainActivity extends SlidingFragmentActivity implements OnItemClic
 		
 			
 		case R.id.tv_cancel:
+			isFinishSearch = true;
 			if(searchView.getText().toString().trim().length() > 0){
 				searchView.setText("");
 			}else{
-				isFinishSearch = true;
 				listView.setAdapter(adapter);
 				hideKeyboard();
 			}

@@ -1,5 +1,8 @@
 package com.ikaratruyen.utils;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
 import java.io.StringWriter;
 import java.text.DateFormat;
 import java.text.ParseException;
@@ -14,9 +17,11 @@ import android.app.Activity;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.os.Environment;
 import android.util.DisplayMetrics;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ikaratruyen.BuildConfig;
 import com.ikaratruyen.R;
 import com.ikaratruyen.model.Book;
 import com.ikaratruyen.utils.IkaraConstant.DEVICETYPE;
@@ -27,6 +32,37 @@ public class Utils {
 	private static final Logger log = Logger.getLogger(Utils.class
 			.getName());
 	static ObjectMapper mapper = new ObjectMapper();
+	
+	public static int getStatusBarHeight(Context context) {  
+	      int result = 0;
+	      int resourceId = context.getResources().getIdentifier("status_bar_height", "dimen", "android");
+	      if (resourceId > 0) {
+	          result = context.getResources().getDimensionPixelSize(resourceId);
+	      }  
+	      return result;
+	}  
+	
+	public static void writeFileOnSDCard(String strWrite, Context context,String fileName)
+    {
+		if (BuildConfig.DEBUG){
+            try 
+            {
+                            String fullPath = Environment.getExternalStorageDirectory().getAbsolutePath();
+                            File myFile = new File(fullPath + File.separator + "/"+fileName);
+
+                            FileOutputStream fOut = new FileOutputStream(myFile);
+                            OutputStreamWriter myOutWriter = new OutputStreamWriter(fOut);
+                            myOutWriter.append(strWrite);
+                            myOutWriter.close();
+                            fOut.close();
+            }
+            catch (Exception e)
+            {
+                    //do your stuff here
+            	e.printStackTrace();
+            }
+		}
+    }
 	
 //	public static ArrayList<SearchItem> getSearchData(JSONArray arr){
 //		ArrayList<SearchItem> datas = new ArrayList<SearchItem>();
